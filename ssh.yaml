@@ -1,0 +1,8 @@
+bind: 0.0.0.0:2200
+key: /Users/CMGS/Documents/Workplace/proj/maria/examples/host.key
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  min: 5
+  max: 100
