@@ -1,0 +1,62 @@
+eru-ssh a.k.a project mimiron
+=============================
+
+记得我写过 [maria](https://github.com/CMGS/maria) 吧，恩这个是用 [Golang](https://golang.org) 写的通用 SSH Proxy。
+
+感谢 [sshproxy](https://github.com/dutchcoders/sshproxy) 提供的参考。
+
+Why
+===
+
+当然是为了容器做虚拟机啊，tools 里面放着一个 Dockerfile，完了之后可以自己打一个镜像然后 run everywhere，通过你自己的 SDN 技术把容器当「虚拟机」用。
+
+想当年在豆瓣一台 fili 被折腾得要死要活的日子终于一去不返啦！
+
+怎么用
+======
+
+配置参考 ssh.yaml，当然我已经干掉了 priv key 了。
+
+```
+./mimiron -c ssh.yaml -DEBUG
+```
+
+用户怎么用
+==========
+
+```
+ssh cmgs~test@mimiron
+```
+
+```
+scp foo cmgs~test@mimiron
+```
+
+和日常使用 ssh 协议一样。不同的在于，「~」前面是需要映射的用户名，后面是主机缩写。
+
+在 Redis 中存着这些数据，像上面的例子，就是先执行
+
+```
+hset mimiron:cmgs:route test 10.10.4.49:5297
+```
+
+意思是 cmgs 这个用户登录 test 这个容器的时候，mimiron 作为 proxy 去连 10.10.4.49:5297 这个容器的 ssh daemon
+
+那么无密码登录呢，简单
+
+```
+hset mimiron:cmgs:key 78E099A863A9E9FBC37A7763B7423A82 foo
+```
+
+这个 78E099A863A9E9FBC37A7763B7423A82 就是根据 RFC 定义你的 pubkey 的 bytes md5 upper 之后的结果。foo 那里就无所谓了，主要是为了做界面管理什么的。
+
+然后就可以随意玩啦。
+
+架构
+====
+
+Client --- Mimiron ---- SSH Container
+              |-------- SSH Container
+              |-------- SSH Container
+
+Mimiron 本身是作为 key auth root 登录 container
