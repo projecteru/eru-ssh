@@ -55,8 +55,10 @@ hset mimiron:cmgs:key 78E099A863A9E9FBC37A7763B7423A82 foo
 架构
 ====
 
+```
 Client --- Mimiron ---- SSH Container
               |-------- SSH Container
               |-------- SSH Container
+```
 
 Mimiron 本身是作为 key auth root 登录 container
