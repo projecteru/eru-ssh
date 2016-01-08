@@ -136,7 +136,7 @@ func wrap(conn ssh.ConnMetadata, r io.ReadCloser) (io.ReadCloser, error) {
 	return NewTypeWriterReadCloser(r), nil
 }
 func closeConn(conn ssh.ConnMetadata) error {
-	defer Lock.Lock()
+	Lock.Lock()
 	defer Lock.Unlock()
 	defer delete(MetaData, conn.RemoteAddr())
 	logs.Debug("Clean sessions")

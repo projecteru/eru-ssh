@@ -57,6 +57,7 @@ func InitSSHConfig() *ssh.ServerConfig {
 			if err != nil {
 				return nil, err
 			}
+			logs.Info("Login success", remote)
 			meta.Remote = remote
 			meta.Client = client
 			Lock.Lock()
@@ -91,6 +92,7 @@ func InitSSHConfig() *ssh.ServerConfig {
 			if err != nil {
 				return nil, err
 			}
+			logs.Info("Login success", remote)
 			meta.Remote = remote
 			meta.Client = client
 			Lock.Lock()
