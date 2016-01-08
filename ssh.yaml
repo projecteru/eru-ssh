@@ -1,5 +1,6 @@
 bind: 0.0.0.0:2200
-key: /Users/CMGS/Documents/Workplace/proj/maria/examples/host.key
+hostkey: /Users/CMGS/Documents/Workplace/proj/maria/examples/host.key
+privkey: /Users/CMGS/Documents/Workplace/work/mimiron/tools/mimiron
 
 redis:
   host: 127.0.0.1

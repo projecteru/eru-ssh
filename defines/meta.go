@@ -7,4 +7,5 @@ type Meta struct {
 	Password string
 	Remote   string
 	Client   *ssh.Client
+	Pubkey   ssh.PublicKey
 }

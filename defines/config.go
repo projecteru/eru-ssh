@@ -8,8 +8,9 @@ type RedisConfig struct {
 }
 
 type SSHConfig struct {
-	Bind string
-	Key  string
+	Bind    string
+	HostKey string
+	PrivKey string
 
 	Redis RedisConfig
 }

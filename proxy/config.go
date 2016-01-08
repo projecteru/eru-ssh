@@ -2,15 +2,13 @@ package proxy
 
 import (
 	"errors"
-	"io/ioutil"
 	"net"
-	"strings"
 	"sync"
 
-	"github.com/keimoon/gore"
 	"github.com/projecteru/eru-agent/logs"
 	"github.com/projecteru/eru-ssh/defines"
 	"github.com/projecteru/eru-ssh/g"
+	"github.com/projecteru/eru-ssh/utils"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -18,12 +16,67 @@ var Lock sync.RWMutex
 var MetaData map[net.Addr]defines.Meta = map[net.Addr]defines.Meta{}
 
 func InitSSHConfig() *ssh.ServerConfig {
+	privKey, err := utils.LoadKey(g.Config.PrivKey)
+	if err != nil {
+		logs.Assert(err, "Failed to load priv key")
+	}
+
 	config := &ssh.ServerConfig{
-		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-			logs.Info("Login attempt", conn.RemoteAddr(), conn.User(), string(password))
+		AuthLogCallback: func(conn ssh.ConnMetadata, method string, err error) {
+			logs.Debug("Method type", method, "Error", err)
+		},
+		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			username := conn.User()
 			clientAddr := conn.RemoteAddr()
+			keyHex := utils.GetFingerPrint(key.Marshal())
+
+			user, remote := utils.GetRealUserRemote(username)
+			if user == "" || remote == "" {
+				return nil, errors.New("Wrong info")
+			}
+
+			logs.Info("Login attempt", conn.RemoteAddr(), username, user, remote, keyHex)
+
+			if !utils.CheckKey(user, keyHex) {
+				return nil, errors.New("Wrong key")
+			}
+
 			meta := defines.Meta{
-				Username: conn.User(),
+				Username: username,
+				Pubkey:   key,
+			}
+
+			clientConfig := &ssh.ClientConfig{
+				User: "root",
+				Auth: []ssh.AuthMethod{
+					ssh.PublicKeys(privKey),
+				},
+			}
+
+			client, err := ssh.Dial("tcp", remote, clientConfig)
+			if err != nil {
+				return nil, err
+			}
+			meta.Remote = remote
+			meta.Client = client
+			Lock.Lock()
+			defer Lock.Unlock()
+			MetaData[clientAddr] = meta
+			return nil, nil
+		},
+		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			username := conn.User()
+			clientAddr := conn.RemoteAddr()
+
+			user, remote := utils.GetRealUserRemote(username)
+			if user == "" || remote == "" {
+				return nil, errors.New("Wrong info")
+			}
+
+			logs.Info("Login attempt", conn.RemoteAddr(), username, string(password))
+
+			meta := defines.Meta{
+				Username: username,
 				Password: string(password),
 			}
 
@@ -32,20 +85,6 @@ func InitSSHConfig() *ssh.ServerConfig {
 				Auth: []ssh.AuthMethod{
 					ssh.Password(string(password)),
 				},
-			}
-			rds := g.GetRedisConn()
-			defer g.ReleaseRedisConn(rds)
-			var remote string
-
-			keys := strings.Split(conn.User(), "~")
-			user, host := keys[0], keys[1]
-			if rep, err := gore.NewCommand("HGET", user, host).Run(rds); err != nil {
-				return nil, err
-			} else {
-				if rep.IsNil() {
-					return nil, errors.New("no dest")
-				}
-				remote, _ = rep.String()
 			}
 
 			client, err := ssh.Dial("tcp", remote, clientConfig)
@@ -60,16 +99,11 @@ func InitSSHConfig() *ssh.ServerConfig {
 			return nil, nil
 		},
 	}
-	privateBytes, err := ioutil.ReadFile(g.Config.Key)
-	if err != nil {
-		logs.Assert(err, "Failed to load private key")
-	}
 
-	private, err := ssh.ParsePrivateKey(privateBytes)
+	hostKey, err := utils.LoadKey(g.Config.HostKey)
 	if err != nil {
-		logs.Assert(err, "Failed to parse private key")
+		logs.Assert(err, "Failed to load host key")
 	}
-
-	config.AddHostKey(private)
+	config.AddHostKey(hostKey)
 	return config
 }
