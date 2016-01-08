@@ -30,12 +30,12 @@ func (self *SSHConn) serve() error {
 	go ssh.DiscardRequests(reqs)
 
 	for newChannel := range chans {
-		channel2, requests2, err := clientConn.OpenChannel(newChannel.ChannelType(), newChannel.ExtraData())
+		remoteChannel, remoteRequest, err := clientConn.OpenChannel(newChannel.ChannelType(), newChannel.ExtraData())
 		if err != nil {
 			return err
 		}
 
-		channel, requests, err := newChannel.Accept()
+		localChannel, localRequest, err := newChannel.Accept()
 		if err != nil {
 			return err
 		}
@@ -49,49 +49,44 @@ func (self *SSHConn) serve() error {
 				var dst ssh.Channel
 
 				select {
-				case req = <-requests:
-					dst = channel2
-				case req = <-requests2:
-					dst = channel
+				case req = <-localRequest:
+					dst = remoteChannel
+					logs.Debug("from local to remote")
+				case req = <-remoteRequest:
+					dst = localChannel
+					logs.Debug("from remote to local")
 				}
 
-				//logs.Debug("Request", dst, req.Type, req.WantReply, req.Payload)
+				if req == nil {
+					break
+				}
+
+				logs.Debug("Request", req.Type, req.WantReply)
 				b, err := dst.SendRequest(req.Type, req.WantReply, req.Payload)
 				if err != nil {
 					logs.Info(err)
 				}
-
 				if req.WantReply {
 					req.Reply(b, nil)
 				}
-
 				switch req.Type {
 				case "exit-status":
 					break r
-				case "exec":
-					// not supported (yet)
-				default:
-					logs.Info(req.Type)
 				}
 			}
 
-			channel.Close()
-			channel2.Close()
+			localChannel.Close()
+			remoteChannel.Close()
 		}()
 
 		// connect channels
 		logs.Debug("Connecting channels")
 
-		var wrappedChannel io.ReadCloser = channel
-		var wrappedChannel2 io.ReadCloser = channel2
+		go io.Copy(remoteChannel, localChannel)
+		go io.Copy(localChannel, remoteChannel)
 
-		wrappedChannel2, err = wrap(serverConn, channel2)
-
-		go io.Copy(channel2, wrappedChannel)
-		go io.Copy(channel, wrappedChannel2)
-
-		defer wrappedChannel.Close()
-		defer wrappedChannel2.Close()
+		defer remoteChannel.Close()
+		defer localChannel.Close()
 	}
 
 	closeConn(serverConn)
@@ -128,13 +123,14 @@ func getClient(conn ssh.ConnMetadata) (*ssh.Client, error) {
 	Lock.RLock()
 	defer Lock.RUnlock()
 	meta := MetaData[conn.RemoteAddr()]
-	logs.Debug(meta)
 	logs.Debug("Connection accepted from", conn.RemoteAddr())
 	return meta.Client, nil
 }
+
 func wrap(conn ssh.ConnMetadata, r io.ReadCloser) (io.ReadCloser, error) {
-	return NewTypeWriterReadCloser(r), nil
+	return r, nil
 }
+
 func closeConn(conn ssh.ConnMetadata) error {
 	Lock.Lock()
 	defer Lock.Unlock()
