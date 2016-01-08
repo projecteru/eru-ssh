@@ -43,18 +43,17 @@ func GetFingerPrint(keyBytes []byte) string {
 func CheckKey(user, keyHex string) bool {
 	rds := g.GetRedisConn()
 	defer g.ReleaseRedisConn(rds)
-	checkKey := fmt.Sprintf(common.CHECK_KEY, keyHex)
+	checkKey := fmt.Sprintf(common.CHECK_KEY, user)
 	var err error
 	var rep *gore.Reply
-	if rep, err = gore.NewCommand("GET", checkKey).Run(rds); err != nil {
+	if rep, err = gore.NewCommand("HGET", checkKey, keyHex).Run(rds); err != nil {
 		logs.Info("Get info failed", err)
 		return false
 	}
 	if rep.IsNil() {
 		return false
 	}
-	info, _ := rep.String()
-	return info == user
+	return true
 }
 
 func LoadKey(keyPath string) (ssh.Signer, error) {
