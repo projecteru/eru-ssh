@@ -74,19 +74,21 @@ func (self *SSHConn) serve() error {
 					break r
 				}
 			}
-
-			localChannel.Close()
-			remoteChannel.Close()
 		}()
 
 		// connect channels
 		logs.Debug("Connecting channels")
 
-		go io.Copy(remoteChannel, localChannel)
-		go io.Copy(localChannel, remoteChannel)
-
-		defer remoteChannel.Close()
-		defer localChannel.Close()
+		go func() {
+			defer remoteChannel.Close()
+			io.Copy(remoteChannel, localChannel)
+			remoteChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 0})
+		}()
+		go func() {
+			defer localChannel.Close()
+			io.Copy(localChannel, remoteChannel)
+			localChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 0})
+		}()
 	}
 
 	closeConn(serverConn)
